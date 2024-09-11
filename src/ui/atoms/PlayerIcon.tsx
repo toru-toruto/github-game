@@ -7,7 +7,7 @@ type Props = {
   setSelectedPlayerNum: Dispatch<SetStateAction<number>>;
 };
 
-export const Player: React.FC<Props> = ({
+export const PlayerIcon: React.FC<Props> = ({
   playerId,
   isActive,
   setSelectedPlayerNum: setActiveNum,
