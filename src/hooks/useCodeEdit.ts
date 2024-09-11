@@ -1,3 +1,4 @@
+import { PlayerData } from "@/types";
 import { useCallback, useEffect, useState } from "react";
 
 type Props = {
@@ -5,21 +6,18 @@ type Props = {
   lineNum: number;
 };
 
-type PlayerStatus = "NONE" | "WORKING" | "CONFLICT";
 
-type PlayerData = {
-  id: number;
-  checkoutTimestamp: number;
-  status: PlayerStatus;
-};
 
 export const useCodeEdit = ({ playerNum, lineNum }: Props) => {
-  const [playerData, setPlayerData] = useState<Array<PlayerData>>([]);
-
+  const [playerDataList, setPlayerDataList] = useState<Array<PlayerData>>([]);
   const [selectedPlayerId, setSelectedPlayerId] = useState<number>(0);
-  const [lineDataMap, setLineDataMap] = useState<Map<number, Array<number>>>(new Map());
-
-  
+  // for checking conflicts
+  // we can check conflicts by checking timestamps from checkoutTimestamp to now.
+  const [timestampList, setTimestampList] = useState<Array<number>>([]);
+  // Map<timestamp, Array<updatedLineIndex>>
+  const [timestampToLineDataMap, setTimestampToLineDataMap] = useState<Map<number, Array<number>>>(
+    new Map()
+  );
 
   // initialize player data
   useEffect(() => {
@@ -29,59 +27,113 @@ export const useCodeEdit = ({ playerNum, lineNum }: Props) => {
           id: i,
           checkoutTimestamp: 0,
           status: "NONE",
+          updatedLineIndex: [],
+          conflictLineIndex: [],
         } as PlayerData)
     );
-    setPlayerData(newPlayerData);
+    setPlayerDataList(newPlayerData);
   }, []);
 
-  const handleEdit = useCallback(
-    (index: number) => {
-      setLineDataMap((prev) => {
-        const newMap = new Map(prev);
-        // if index is not in map, add it
-        if (!newMap.has(index)) {
-          newMap.set(index, []);
-        }
-        // if selected player number is not in the array, add it
-        if (!newMap.get(index)?.includes(selectedPlayerId)) {
-          newMap.get(index)?.push(selectedPlayerId);
-        }
-        return newMap;
-      });
+  const handleCheckout = useCallback(
+    (p: PlayerData) => {
+      const now = Date.now();
+      p.checkoutTimestamp = now;
+      setTimestampList((prev) => [...prev, now]);
+      // checkout timestamp is not necessary to add to timestampToLineDataMap,
+      // because there is no updated line index yet.
+      p.status = "WORKING";
     },
-    [selectedPlayerId, setLineDataMap]
+    [setTimestampList]
+  );
+
+  const handleTryMerge = useCallback(
+    (p: PlayerData) => {
+      // TODO: check if there is a conflict
+      const hasConflict = true;
+      if (hasConflict) {
+        p.status = "CONFLICT";
+        // TODO: set conflict line index
+      } else {
+        const now = Date.now();
+        setTimestampList((prev) => [...prev, now]);
+        setTimestampToLineDataMap((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(now, p.updatedLineIndex);
+          return newMap;
+        });
+        p.status = "NONE";
+      }
+    },
+    [setTimestampList, setTimestampToLineDataMap]
+  );
+
+  const handleResolveConflict = useCallback(
+    (p: PlayerData) => {
+      // TODO: resolve conflict
+      const hasConflict = false;
+      if (!hasConflict) {
+        const now = Date.now();
+        setTimestampList((prev) => [...prev, now]);
+        setTimestampToLineDataMap((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(now, p.updatedLineIndex);
+          return newMap;
+        });
+        p.status = "NONE";
+      }
+    },
+    [setTimestampList, setTimestampToLineDataMap]
+  );
+
+  const handleEdit = useCallback(
+    (p: PlayerData) => {
+      // set random index to true
+      const index = Math.floor(Math.random() * lineNum);
+      p.updatedLineIndex.push(index);
+    },
+    [selectedPlayerId, setPlayerDataList]
   );
 
   useEffect(() => {
     // add key press event listener
     const handleKeyDown = (e: KeyboardEvent) => {
+      const p = playerDataList[selectedPlayerId];
       if (e.key === "Enter") {
-        const p = playerData[selectedPlayerId];
         if (p.status === "NONE") {
-          p.checkoutTimestamp = Date.now();
-          p.status = "WORKING";
+          handleCheckout(p);
         } else if (p.status === "WORKING") {
-          // check if there is a conflict
-          // if there is, set status to CONFLICT
-          // if not, set status to NONE
+          handleTryMerge(p);
         } else if (p.status === "CONFLICT") {
-          // resolve conflict
-          // if all conflicts are resolved, set status to NONE
+          handleResolveConflict(p);
         }
       } else {
-        // set random index to true
-        handleEdit(Math.floor(Math.random() * lineNum));
+        if (p.status === "WORKING") {
+          handleEdit(p);
+        }
       }
+      setPlayerDataList((prev) => {
+        const newPlayerData = [...prev];
+        newPlayerData[selectedPlayerId] = p;
+        return newPlayerData;
+      });
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [selectedPlayerId]);
+  }, [
+    playerDataList,
+    selectedPlayerId,
+    handleCheckout,
+    handleTryMerge,
+    handleResolveConflict,
+    handleEdit,
+    setPlayerDataList,
+  ]);
 
   return {
-    lineDataMap,
+    playerDataList,
     selectedPlayerId,
     setSelectedPlayerId,
   };

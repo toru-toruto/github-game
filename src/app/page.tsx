@@ -11,7 +11,11 @@ export default function Home() {
   const playerNum = 4;
   const players = useMemo(() => Array.from({ length: playerNum }), [playerNum]);
 
-  const { lineDataMap, selectedPlayerId, setSelectedPlayerId } = useCodeEdit({
+  const {
+    playerDataList: playerData,
+    selectedPlayerId,
+    setSelectedPlayerId,
+  } = useCodeEdit({
     playerNum,
     lineNum,
   });
@@ -29,7 +33,7 @@ export default function Home() {
         ))}
       </div>
       <div className={`grow h-full bg-green-100 flex flex-col`}>
-        <CodePanel playerId={selectedPlayerId} lineNum={lineNum} lineDataMap={lineDataMap} />
+        <CodePanel lineNum={lineNum} playerData={playerData} />
       </div>
     </div>
   );
