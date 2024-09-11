@@ -8,7 +8,7 @@ type Props = {
 
 
 
-export const useCodeEdit = ({ playerNum, lineNum }: Props) => {
+export const useGithubSystem = ({ playerNum, lineNum }: Props) => {
   const [playerDataList, setPlayerDataList] = useState<Array<PlayerData>>([]);
   const [selectedPlayerId, setSelectedPlayerId] = useState<number>(0);
   // for checking conflicts

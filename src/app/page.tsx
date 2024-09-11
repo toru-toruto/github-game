@@ -1,6 +1,6 @@
 "use client";
 
-import { useCodeEdit } from "@/hooks/useCodeEdit";
+import { useGithubSystem } from "@/hooks/useGithubSystem";
 import { PlayerIcon } from "@/ui/atoms/PlayerIcon";
 import { CodePanel } from "@/ui/molecules/CodePanel";
 import { useEffect, useMemo } from "react";
@@ -15,7 +15,7 @@ export default function Home() {
     playerDataList: playerData,
     selectedPlayerId,
     setSelectedPlayerId,
-  } = useCodeEdit({
+  } = useGithubSystem({
     playerNum,
     lineNum,
   });
