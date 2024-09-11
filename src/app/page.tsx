@@ -6,7 +6,7 @@ import { CodePanel } from "@/ui/molecules/CodePanel";
 import { useEffect, useMemo } from "react";
 
 export default function Home() {
-  const lineNum = 30;
+  const lineNum = 100;
 
   const playerNum = 4;
   const players = useMemo(() => Array.from({ length: playerNum }), [playerNum]);
@@ -33,7 +33,10 @@ export default function Home() {
         ))}
       </div>
       <div className={`grow h-full bg-green-100 flex flex-col`}>
-        <CodePanel lineNum={lineNum} playerData={playerData} />
+        <CodePanel lineNum={lineNum} playerData={playerData} selectedPlayerId={selectedPlayerId} />
+      </div>
+      <div className="absolute">
+        <p>{playerData[selectedPlayerId]?.status}</p>
       </div>
     </div>
   );

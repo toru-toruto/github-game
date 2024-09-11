@@ -4,6 +4,6 @@ export type PlayerData = {
   id: number;
   checkoutTimestamp: number;
   status: PlayerStatus;
-  updatedLineIndex: Array<number>;
-  conflictLineIndex: Array<number>;
+  updatedLineList: Array<number>;
+  conflictLineList: Array<number>;
 };

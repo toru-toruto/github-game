@@ -6,11 +6,9 @@ type Props = {
   lineNum: number;
 };
 
-
-
 export const useGithubSystem = ({ playerNum, lineNum }: Props) => {
   const [playerDataList, setPlayerDataList] = useState<Array<PlayerData>>([]);
-  const [selectedPlayerId, setSelectedPlayerId] = useState<number>(0);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<number>(-1);
   // for checking conflicts
   // we can check conflicts by checking timestamps from checkoutTimestamp to now.
   const [timestampList, setTimestampList] = useState<Array<number>>([]);
@@ -27,11 +25,12 @@ export const useGithubSystem = ({ playerNum, lineNum }: Props) => {
           id: i,
           checkoutTimestamp: 0,
           status: "NONE",
-          updatedLineIndex: [],
-          conflictLineIndex: [],
+          updatedLineList: [],
+          conflictLineList: [],
         } as PlayerData)
     );
     setPlayerDataList(newPlayerData);
+    setSelectedPlayerId(0);
   }, []);
 
   const handleCheckout = useCallback(
@@ -42,44 +41,74 @@ export const useGithubSystem = ({ playerNum, lineNum }: Props) => {
       // checkout timestamp is not necessary to add to timestampToLineDataMap,
       // because there is no updated line index yet.
       p.status = "WORKING";
+      console.log(`Checkout id: ${p.id}, checkoutTimestamp: ${p.checkoutTimestamp}`);
     },
     [setTimestampList]
   );
 
-  const handleTryMerge = useCallback(
+  const detectConflict = useCallback(
     (p: PlayerData) => {
-      // TODO: check if there is a conflict
-      const hasConflict = true;
-      if (hasConflict) {
-        p.status = "CONFLICT";
-        // TODO: set conflict line index
-      } else {
-        const now = Date.now();
-        setTimestampList((prev) => [...prev, now]);
-        setTimestampToLineDataMap((prev) => {
-          const newMap = new Map(prev);
-          newMap.set(now, p.updatedLineIndex);
-          return newMap;
+      const from = p.checkoutTimestamp;
+      const to = Date.now();
+      const timestamps = timestampList.filter((t) => t > from && t < to);
+      const lineDataList = timestamps.map((t) => timestampToLineDataMap.get(t));
+      console.log(timestampToLineDataMap.get(timestamps[0]));
+      // console.log(from, to, timestamps, lineDataList);
+      console.log(
+        `DetectConflict id: ${p.id}, from: ${from}, to: ${to}, timestamps: ${timestamps}, lineDataList: ${lineDataList}`
+      );
+      const conflictLineSet = new Set<number>();
+      lineDataList.forEach((lineData) => {
+        lineData?.forEach((line) => {
+          if (p.updatedLineList.includes(line)) conflictLineSet.add(line);
         });
-        p.status = "NONE";
-      }
+      });
+      p.conflictLineList = Array.from(conflictLineSet);
+      return p.conflictLineList.length > 0;
+    },
+    [timestampList, timestampToLineDataMap]
+  );
+
+  const merge = useCallback(
+    (p: PlayerData) => {
+      const now = Date.now();
+      console.log(`Merge id: ${p.id}, mergeTimestamp: ${now}`);
+      setTimestampList((prev) => [...prev, now]);
+      console.log(p.updatedLineList);
+      const updatedLineList = p.updatedLineList;
+      setTimestampToLineDataMap((prev) => {
+        const newMap = new Map(prev);
+        newMap.set(now, updatedLineList);
+        return newMap;
+      });
+      p.updatedLineList = [];
+      console.log(p.updatedLineList);
+      // p.conflictLineList = [];
+      // p.checkoutTimestamp = 0;
+      p.status = "NONE";
     },
     [setTimestampList, setTimestampToLineDataMap]
   );
 
+  const handleTryMerge = useCallback(
+    (p: PlayerData) => {
+      const hasConflict = detectConflict(p);
+      if (hasConflict) {
+        p.status = "CONFLICT";
+      } else {
+        merge(p);
+      }
+    },
+    [detectConflict, setTimestampList, setTimestampToLineDataMap]
+  );
+
   const handleResolveConflict = useCallback(
     (p: PlayerData) => {
-      // TODO: resolve conflict
-      const hasConflict = false;
-      if (!hasConflict) {
-        const now = Date.now();
-        setTimestampList((prev) => [...prev, now]);
-        setTimestampToLineDataMap((prev) => {
-          const newMap = new Map(prev);
-          newMap.set(now, p.updatedLineIndex);
-          return newMap;
-        });
-        p.status = "NONE";
+      // resolve conflict
+      p.conflictLineList.pop();
+      // if there is no conflict, change status to NONE
+      if (p.conflictLineList.length === 0) {
+        merge(p);
       }
     },
     [setTimestampList, setTimestampToLineDataMap]
@@ -89,7 +118,7 @@ export const useGithubSystem = ({ playerNum, lineNum }: Props) => {
     (p: PlayerData) => {
       // set random index to true
       const index = Math.floor(Math.random() * lineNum);
-      p.updatedLineIndex.push(index);
+      p.updatedLineList.push(index);
     },
     [selectedPlayerId, setPlayerDataList]
   );
