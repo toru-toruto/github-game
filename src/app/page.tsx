@@ -20,6 +20,19 @@ export default function Home() {
     lineNum,
   });
 
+  const directionText = useMemo(() => {
+    switch (playerData[selectedPlayerId]?.status) {
+      case "NONE":
+        return "Press ENTER key to checkout.";
+      case "WORKING":
+        return "Press any key to commit, or ENTER key to try to merge.";
+      case "CONFLICT":
+        return "Press ENTER key to resolve a conflicted line.";
+      default:
+        return "Press ENTER key to checkout.";
+    }
+  }, [playerData, selectedPlayerId]);
+
   return (
     <div className="h-screen bg-white flex">
       <div className="w-auto h-full bg-green-400 grid grid-rows-4 gap-4 py-4 pl-4">
@@ -35,8 +48,10 @@ export default function Home() {
       <div className={`grow h-full bg-green-100 flex flex-col`}>
         <CodePanel lineNum={lineNum} playerData={playerData} selectedPlayerId={selectedPlayerId} />
       </div>
-      <div className="absolute">
-        <p>{playerData[selectedPlayerId]?.status}</p>
+      <div className="absolute text-black">
+        <p>
+          {`player: ${selectedPlayerId}, status: ${playerData[selectedPlayerId]?.status}, ${directionText}`}
+        </p>
       </div>
     </div>
   );

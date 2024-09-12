@@ -22,7 +22,11 @@ export const PlayerIcon: React.FC<Props> = ({
           isActive
         )}`}
         onClick={() => setActiveNum(playerId)}
-      ></div>
+      >
+        <div className="w-full h-full flex flex-col justify-center items-center">
+          <label className="text-black">Player {playerId}</label>
+        </div>
+      </div>
     </div>
   );
 };
