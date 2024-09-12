@@ -1,5 +1,3 @@
-import { useCallback, useMemo } from "react";
-
 export const usePlayerColor = () => {
   const getPlayerColor = (playerId: number, isActive: boolean) => {
     if (playerId === 0) {

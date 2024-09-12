@@ -31,7 +31,7 @@ export const useGithubSystem = ({ playerNum, lineNum }: Props) => {
     );
     setPlayerDataList(newPlayerData);
     setSelectedPlayerId(0);
-  }, []);
+  }, [playerNum]);
 
   const handleCheckout = useCallback(
     (p: PlayerData) => {
@@ -99,7 +99,7 @@ export const useGithubSystem = ({ playerNum, lineNum }: Props) => {
         merge(p);
       }
     },
-    [detectConflict, setTimestampList, setTimestampToLineDataMap]
+    [detectConflict, merge]
   );
 
   const handleResolveConflict = useCallback(
@@ -111,7 +111,7 @@ export const useGithubSystem = ({ playerNum, lineNum }: Props) => {
         merge(p);
       }
     },
-    [setTimestampList, setTimestampToLineDataMap]
+    [merge]
   );
 
   const handleEdit = useCallback(
@@ -120,7 +120,7 @@ export const useGithubSystem = ({ playerNum, lineNum }: Props) => {
       const index = Math.floor(Math.random() * lineNum);
       p.updatedLineList.push(index);
     },
-    [selectedPlayerId, setPlayerDataList]
+    [lineNum]
   );
 
   useEffect(() => {

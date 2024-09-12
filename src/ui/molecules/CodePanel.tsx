@@ -1,6 +1,5 @@
 import { PlayerData } from "@/types";
 import { CodeLine } from "../atoms/CodeLine";
-import { useMemo } from "react";
 
 type Props = {
   lineNum: number;
