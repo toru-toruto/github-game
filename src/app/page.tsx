@@ -3,7 +3,7 @@
 import { useGithubSystem } from "@/hooks/useGithubSystem";
 import { PlayerIcon } from "@/ui/atoms/PlayerIcon";
 import { CodePanel } from "@/ui/molecules/CodePanel";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 
 export default function Home() {
   const lineNum = 100;

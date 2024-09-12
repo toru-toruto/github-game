@@ -1,5 +1,5 @@
 import { usePlayerColor } from "@/hooks/usePlayerColor";
-import { Dispatch, SetStateAction, useMemo } from "react";
+import { Dispatch, SetStateAction } from "react";
 
 type Props = {
   playerId: number;
