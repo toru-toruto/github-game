@@ -4,37 +4,48 @@ import { useWebRtcConnection } from "@/fetchers/useWebRtcConnection";
 import { useState } from "react";
 
 export default function TestWebrtc() {
-  const { roomId, createRoom, joinRoomById, hangUp, sendMessage } = useWebRtcConnection();
-  const [inputRoomId, setRoomName] = useState("");
+  const {
+    connectionId: connectionId,
+    createConnection: createConnection,
+    joinConnectionById: joinConnectionById,
+    hangUp,
+    sendMessage,
+  } = useWebRtcConnection();
+  const [inputConnectionId, setConnectionName] = useState("");
   const [message, setMessage] = useState("");
 
   return (
     <div>
       <h1>Test WebRTC</h1>
       <div>
-        <input type="button" value="Create Room" className="btn btn-primary" onClick={createRoom} />
+        <input
+          type="button"
+          value="Create Connection"
+          className="btn btn-primary"
+          onClick={createConnection}
+        />
       </div>
       <div>
         <input
           type="text"
-          placeholder="Room ID"
+          placeholder="Connection ID"
           className="input input-bordered"
-          value={inputRoomId}
+          value={inputConnectionId}
           onChange={(event) => {
-            setRoomName(event.target.value);
+            setConnectionName(event.target.value);
           }}
         />
         <input
           type="button"
-          value="Join Room"
+          value="Join Connection"
           className="btn btn-primary"
           onClick={() => {
-            if (!inputRoomId) {
-              alert("Please enter a room name");
+            if (!inputConnectionId) {
+              alert("Please enter a connection name");
               return;
             }
-            joinRoomById(inputRoomId);
-            setRoomName("");
+            joinConnectionById(inputConnectionId);
+            setConnectionName("");
           }}
         />
       </div>
@@ -42,7 +53,7 @@ export default function TestWebrtc() {
         <input type="button" value="Hang Up" className="btn btn-primary" onClick={hangUp} />
       </div>
       <div>
-        <p>Room ID: {roomId}</p>
+        <p>Connection ID: {connectionId}</p>
       </div>
       <div>
         <input

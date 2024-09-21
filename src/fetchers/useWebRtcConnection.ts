@@ -15,6 +15,11 @@ import {
   updateDoc,
 } from "firebase/firestore";
 
+/**
+ * references:
+ * - https://firebase.google.com/docs/firestore/query-data/get-data?hl=ja#web_1
+ * - https://github.com/webrtc/FirebaseRTC/blob/solution/public/app.js
+ *  */
 export const useWebRtcConnection = () => {
   const configuration = {
     iceServers: [
@@ -27,7 +32,7 @@ export const useWebRtcConnection = () => {
   const [peerConnection, setPeerConnection] = useState<RTCPeerConnection | undefined>();
   const [dataChannel, setDataChannel] = useState<RTCDataChannel | undefined>();
 
-  const [roomId, setRoomId] = useState<string | null>(null);
+  const [connectionId, setConnectionId] = useState<string | null>(null);
 
   const createDataChannel = (newDataChannel: RTCDataChannel) => {
     newDataChannel.onopen = () => {
@@ -70,10 +75,10 @@ export const useWebRtcConnection = () => {
     });
   }, []);
 
-  // functions for creating a room
+  // functions for creating a connection
   const collectCandidates = (
     newPeerConnection: RTCPeerConnection,
-    roomRef: DocumentReference<DocumentData, DocumentData>,
+    connectionRef: DocumentReference<DocumentData, DocumentData>,
     candidatesDataName: string
   ) => {
     newPeerConnection?.addEventListener("icecandidate", (event) => {
@@ -82,35 +87,35 @@ export const useWebRtcConnection = () => {
         return;
       }
       console.log("Got candidate: ", event.candidate);
-      addDoc(collection(roomRef, candidatesDataName), event.candidate.toJSON());
+      addDoc(collection(connectionRef, candidatesDataName), event.candidate.toJSON());
     });
   };
 
-  const offerRoom = async (
+  const offerConnection = async (
     newPeerConnection: RTCPeerConnection,
-    roomRef: DocumentReference<DocumentData, DocumentData>
+    connectionRef: DocumentReference<DocumentData, DocumentData>
   ) => {
     console.log(newPeerConnection);
     const offer = await newPeerConnection?.createOffer();
     await newPeerConnection?.setLocalDescription(offer);
     console.log("Created offer:", offer);
 
-    const roomWithOffer = {
+    const connectionWithOffer = {
       offer: {
         type: offer?.type,
         sdp: offer?.sdp,
       },
     };
-    await setDoc(roomRef, roomWithOffer);
-    setRoomId(roomRef.id);
-    console.log(`New room created with SDP offer. Room ID: ${roomRef.id}`);
+    await setDoc(connectionRef, connectionWithOffer);
+    setConnectionId(connectionRef.id);
+    console.log(`New connection created with SDP offer. Connection ID: ${connectionRef.id}`);
   };
 
   const listenRemoteDescription = async (
     newPeerConnection: RTCPeerConnection,
-    roomRef: DocumentReference<DocumentData, DocumentData>
+    connectionRef: DocumentReference<DocumentData, DocumentData>
   ) => {
-    onSnapshot(roomRef, async (snapshot) => {
+    onSnapshot(connectionRef, async (snapshot) => {
       const data = snapshot.data();
       if (!newPeerConnection?.currentRemoteDescription && data?.answer) {
         console.log("Set remote description: ", data.answer);
@@ -122,10 +127,10 @@ export const useWebRtcConnection = () => {
 
   const listenCandidates = async (
     newPeerConnection: RTCPeerConnection,
-    roomRef: DocumentReference<DocumentData, DocumentData>,
+    connectionRef: DocumentReference<DocumentData, DocumentData>,
     candidatesDataName: string
   ) => {
-    onSnapshot(collection(roomRef, candidatesDataName), (snapshot) => {
+    onSnapshot(collection(connectionRef, candidatesDataName), (snapshot) => {
       snapshot.docChanges().forEach(async (change) => {
         if (change.type === "added") {
           const data = change.doc.data();
@@ -136,62 +141,62 @@ export const useWebRtcConnection = () => {
     });
   };
 
-  // end of functions for creating a room
+  // end of functions for creating a connection
 
-  // functions for joining a room
+  // functions for joining a connection
   const answerOffer = async (
     newPeerConnection: RTCPeerConnection,
-    roomRef: DocumentReference<DocumentData, DocumentData>,
-    roomSnapshot: DocumentSnapshot<DocumentData, DocumentData>
+    connectionRef: DocumentReference<DocumentData, DocumentData>,
+    connectionSnapshot: DocumentSnapshot<DocumentData, DocumentData>
   ) => {
-    const offer = roomSnapshot.data()?.offer;
+    const offer = connectionSnapshot.data()?.offer;
     console.log("Got offer:", offer);
     await newPeerConnection?.setRemoteDescription(new RTCSessionDescription(offer));
     const answer = await newPeerConnection?.createAnswer();
     console.log("Created answer:", answer);
     await newPeerConnection?.setLocalDescription(answer);
 
-    const roomWithAnswer = {
+    const connectionWithAnswer = {
       answer: {
         type: answer?.type,
         sdp: answer?.sdp,
       },
     };
-    await updateDoc(roomRef, roomWithAnswer);
+    await updateDoc(connectionRef, connectionWithAnswer);
   };
-  // end of functions for joining a room
+  // end of functions for joining a connection
 
-  const createRoom = async () => {
-    const roomRef = doc(collection(db, "rooms"));
+  const createConnection = async () => {
+    const connectionRef = doc(collection(db, "connections"));
 
     console.log("Create PeerConnection with configuration: ", configuration);
     const newPeerConnection = new RTCPeerConnection(configuration);
     createDataChannel(newPeerConnection?.createDataChannel("my-chat"));
     registerPeerConnectionListeners(newPeerConnection);
-    collectCandidates(newPeerConnection, roomRef, "callerCandidates");
-    offerRoom(newPeerConnection, roomRef);
-    listenRemoteDescription(newPeerConnection, roomRef);
-    listenCandidates(newPeerConnection, roomRef, "calleeCandidates");
+    collectCandidates(newPeerConnection, connectionRef, "callerCandidates");
+    offerConnection(newPeerConnection, connectionRef);
+    listenRemoteDescription(newPeerConnection, connectionRef);
+    listenCandidates(newPeerConnection, connectionRef, "calleeCandidates");
     console.log(newPeerConnection);
 
     setPeerConnection(newPeerConnection);
   };
 
-  const joinRoomById = async (roomId: string) => {
-    console.log(roomId);
-    const roomRef = doc(collection(db, "rooms"), roomId);
-    const roomSnapshot = await getDoc(roomRef);
-    console.log("Got room:", roomSnapshot.exists());
+  const joinConnectionById = async (connectionId: string) => {
+    console.log(connectionId);
+    const connectionRef = doc(collection(db, "connections"), connectionId);
+    const connectionSnapshot = await getDoc(connectionRef);
+    console.log("Got connection:", connectionSnapshot.exists());
 
-    if (roomSnapshot.exists()) {
+    if (connectionSnapshot.exists()) {
       console.log("Create PeerConnection with configuration: ", configuration);
       const newPeerConnection = new RTCPeerConnection(configuration);
       // createDataChannel(newPeerConnection);
       registerPeerConnectionListeners(newPeerConnection);
-      collectCandidates(newPeerConnection, roomRef, "calleeCandidates");
-      answerOffer(newPeerConnection, roomRef, roomSnapshot);
-      listenCandidates(newPeerConnection, roomRef, "callerCandidates");
-      setRoomId(roomId);
+      collectCandidates(newPeerConnection, connectionRef, "calleeCandidates");
+      answerOffer(newPeerConnection, connectionRef, connectionSnapshot);
+      listenCandidates(newPeerConnection, connectionRef, "callerCandidates");
+      setConnectionId(connectionId);
       console.log(newPeerConnection);
 
       setPeerConnection(newPeerConnection);
@@ -204,18 +209,18 @@ export const useWebRtcConnection = () => {
       peerConnection.close();
     }
 
-    if (roomId) {
-      const roomRef = doc(collection(db, "rooms"), roomId);
-      const calleeCandidates = await getDocs(collection(roomRef, "calleeCandidates"));
+    if (connectionId) {
+      const connectionRef = doc(collection(db, "connections"), connectionId);
+      const calleeCandidates = await getDocs(collection(connectionRef, "calleeCandidates"));
       calleeCandidates.forEach(async (candidate) => {
         await deleteDoc(candidate.ref);
       });
-      const callerCandidates = await getDocs(collection(roomRef, "callerCandidates"));
+      const callerCandidates = await getDocs(collection(connectionRef, "callerCandidates"));
       callerCandidates.forEach(async (candidate) => {
         await deleteDoc(candidate.ref);
       });
-      await deleteDoc(roomRef);
-      setRoomId("");
+      await deleteDoc(connectionRef);
+      setConnectionId("");
     }
   };
 
@@ -235,5 +240,11 @@ export const useWebRtcConnection = () => {
     dataChannel?.send(message);
   };
 
-  return { roomId, createRoom, joinRoomById, hangUp, sendMessage };
+  return {
+    connectionId: connectionId,
+    createConnection,
+    joinConnectionById,
+    hangUp,
+    sendMessage,
+  };
 };
