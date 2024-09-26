@@ -161,7 +161,6 @@ export const useWebRtcConnection = () => {
     },
     []
   );
-
   // end of functions for creating a connection
 
   // functions for joining a connection
@@ -192,7 +191,6 @@ export const useWebRtcConnection = () => {
 
   const createConnection = useCallback(async () => {
     const connectionRef = doc(collection(db, "connections"));
-
     console.log("Create PeerConnection with configuration: ", configuration);
     const newPeerConnection = new RTCPeerConnection(configuration);
     createDataChannel(newPeerConnection?.createDataChannel("my-chat"));
@@ -288,7 +286,7 @@ export const useWebRtcConnection = () => {
   );
 
   return {
-    connectionId: connectionId,
+    connectionId,
     createConnection,
     joinConnectionById,
     hangUp,
