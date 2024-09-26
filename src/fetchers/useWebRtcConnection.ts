@@ -1,4 +1,4 @@
-import { MouseEvent, useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { db } from "@/firebase-config/firebase-config";
 import {
   addDoc,
@@ -242,29 +242,26 @@ export const useWebRtcConnection = () => {
     ]
   );
 
-  const hangUp = useCallback(
-    async (ev: MouseEvent<HTMLInputElement>) => {
-      if (peerConnection) {
-        dataChannel?.close();
-        peerConnection.close();
-      }
+  const hangUp = useCallback(async () => {
+    if (peerConnection) {
+      dataChannel?.close();
+      peerConnection.close();
+    }
 
-      if (connectionId) {
-        const connectionRef = doc(collection(db, "connections"), connectionId);
-        const calleeCandidates = await getDocs(collection(connectionRef, "calleeCandidates"));
-        calleeCandidates.forEach(async (candidate) => {
-          await deleteDoc(candidate.ref);
-        });
-        const callerCandidates = await getDocs(collection(connectionRef, "callerCandidates"));
-        callerCandidates.forEach(async (candidate) => {
-          await deleteDoc(candidate.ref);
-        });
-        await deleteDoc(connectionRef);
-        setConnectionId("");
-      }
-    },
-    [connectionId, dataChannel, peerConnection]
-  );
+    if (connectionId) {
+      const connectionRef = doc(collection(db, "connections"), connectionId);
+      const calleeCandidates = await getDocs(collection(connectionRef, "calleeCandidates"));
+      calleeCandidates.forEach(async (candidate) => {
+        await deleteDoc(candidate.ref);
+      });
+      const callerCandidates = await getDocs(collection(connectionRef, "callerCandidates"));
+      callerCandidates.forEach(async (candidate) => {
+        await deleteDoc(candidate.ref);
+      });
+      await deleteDoc(connectionRef);
+      setConnectionId("");
+    }
+  }, [connectionId, dataChannel, peerConnection]);
 
   const sendMessage = useCallback(
     (message: string) => {
