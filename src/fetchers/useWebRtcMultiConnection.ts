@@ -83,6 +83,7 @@ export const useWebRtcMultiConnection = () => {
         console.log("Data channel is open");
       };
       newDataChannel.onmessage = (event) => {
+        console.log(event);
         console.log("Got message:", event.data);
       };
       newDataChannel.onclose = () => {
@@ -132,6 +133,10 @@ export const useWebRtcMultiConnection = () => {
       candidatesDataName: string
     ) => {
       newPeerConnection?.addEventListener("icecandidate", async (event) => {
+        if (newPeerConnection.iceConnectionState == "connected") {
+          console.log("already connected");
+          return;
+        }
         if (!event.candidate) {
           console.log("Got final candidate!");
           return;
