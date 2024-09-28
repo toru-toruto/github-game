@@ -121,7 +121,7 @@ export const useWebRtcMultiConnection = () => {
         createDataChannel(receiveChannel, remoteMemberId);
       });
     },
-    []
+    [createDataChannel]
   );
 
   // functions for creating a connection
@@ -147,9 +147,9 @@ export const useWebRtcMultiConnection = () => {
     async (
       newPeerConnection: RTCPeerConnection,
       connectionRef: DocumentReference<DocumentData, DocumentData>,
-      connectionSnapshot: DocumentSnapshot<DocumentData, DocumentData>
+      connectionData: DocumentData
     ) => {
-      const offer = connectionSnapshot.data()?.offer;
+      const offer = connectionData.offer;
       await newPeerConnection.setRemoteDescription(new RTCSessionDescription(offer));
       const answer = await newPeerConnection.createAnswer();
       await newPeerConnection.setLocalDescription(answer);
@@ -182,25 +182,36 @@ export const useWebRtcMultiConnection = () => {
 
   const listenNewMembers = useCallback(
     (roomRef: DocumentReference<DocumentData>, myMemberId: string) => {
-      onSnapshot(collection(roomRef, "members"), (snapshot) => {
+      const membersRef = collection(roomRef, "members");
+      onSnapshot(membersRef, (snapshot) => {
         snapshot.docChanges().forEach(async (change) => {
           if (change.doc.id === myMemberId) return;
+          console.log(change);
           if (change.type === "added") {
             const remoteMemberId = change.doc.id;
             console.log("New member: ", remoteMemberId);
-            const connectionRef = doc(collection(change.doc.ref, "connections"), myMemberId);
-            const connectionSnapshot = await getDoc(connectionRef);
-            console.log("connectionSnapshot", connectionSnapshot.exists());
-            if (connectionSnapshot.exists()) {
-              const newPeerConnection = new RTCPeerConnection(configuration);
-              registerPeerConnectionListeners(newPeerConnection, remoteMemberId);
-              collectCandidates(newPeerConnection, connectionRef, "calleeCandidates");
-              await createAnswer(newPeerConnection, connectionRef, connectionSnapshot);
-              listenCandidates(newPeerConnection, connectionRef, "callerCandidates");
+            onSnapshot(
+              collection(doc(membersRef, remoteMemberId), "connections"),
+              async (connSnapshot) => {
+                connSnapshot.docChanges().forEach(async (connChange) => {
+                  if (connChange.type === "added") {
+                    const newPeerConnection = new RTCPeerConnection(configuration);
+                    const connectionRef = connChange.doc.ref;
+                    const connectionData = connChange.doc.data();
 
-              setPeerConnectionMap((prev) => new Map(prev.set(remoteMemberId, newPeerConnection)));
-              setConnectionIdList((prev) => [...prev, remoteMemberId]);
-            }
+                    registerPeerConnectionListeners(newPeerConnection, remoteMemberId);
+                    collectCandidates(newPeerConnection, connectionRef, "calleeCandidates");
+                    await createAnswer(newPeerConnection, connectionRef, connectionData);
+                    listenCandidates(newPeerConnection, connectionRef, "callerCandidates");
+
+                    setPeerConnectionMap(
+                      (prev) => new Map(prev.set(remoteMemberId, newPeerConnection))
+                    );
+                    setConnectionIdList((prev) => [...prev, remoteMemberId]);
+                  }
+                });
+              }
+            );
           }
         });
       });
@@ -210,16 +221,12 @@ export const useWebRtcMultiConnection = () => {
 
   const createOffer = useCallback(
     async (
-      batch: WriteBatch,
       newPeerConnection: RTCPeerConnection,
       connectionRef: DocumentReference<DocumentData, DocumentData>
     ) => {
       const offer = await newPeerConnection.createOffer();
       await newPeerConnection.setLocalDescription(offer);
 
-      // batch.set(connectionRef, {
-      //   offer: { type: offer.type, sdp: offer.sdp },
-      // });
       await setDoc(connectionRef, { offer: { type: offer.type, sdp: offer.sdp } });
       console.log("Created offer:", offer);
     },
@@ -244,7 +251,7 @@ export const useWebRtcMultiConnection = () => {
   );
 
   const createConnections = useCallback(
-    async (batch: WriteBatch, roomRef: DocumentReference<DocumentData>, myMemberId: string) => {
+    async (roomRef: DocumentReference<DocumentData>, myMemberId: string) => {
       // get members
       const membersSnapshot = await getDocs(collection(roomRef, "members"));
       console.log("membersSnapshot", membersSnapshot.size);
@@ -261,10 +268,11 @@ export const useWebRtcMultiConnection = () => {
         createDataChannel(newPeerConnection.createDataChannel("my-chat"), remoteMemberId);
         registerPeerConnectionListeners(newPeerConnection, remoteMemberId);
         collectCandidates(newPeerConnection, connectionRef, "callerCandidates");
-        await createOffer(batch, newPeerConnection, connectionRef);
+        await createOffer(newPeerConnection, connectionRef);
         await listenRemoteDescription(newPeerConnection, connectionRef);
         listenCandidates(newPeerConnection, connectionRef, "calleeCandidates");
 
+        setConnectionIdList((prev) => [...prev, remoteMemberId]);
         setPeerConnectionMap((prev) => new Map(prev.set(remoteMemberId, newPeerConnection)));
         console.log("end each member");
       });
@@ -285,16 +293,25 @@ export const useWebRtcMultiConnection = () => {
 
   const joinRoomById = useCallback(async (roomId: string) => {
     setRoomId(roomId);
-    const batch = writeBatch(db);
     const roomRef = doc(collection(db, "rooms"), roomId);
     // set my member doc
     const myMemberRef = doc(collection(roomRef, "members"));
-    await createConnections(batch, roomRef, myMemberRef.id);
-    // batch.set(myMemberRef, {});
+    await createConnections(roomRef, myMemberRef.id);
+    listenNewMembers(roomRef, myMemberRef.id);
     setDoc(myMemberRef, {});
-    // batch.commit();
     console.log("joinRoomById", roomId, myMemberRef.id);
   }, []);
 
-  return { roomId, createRoom, joinRoomById };
+  const sendMessage = useCallback(
+    (message: string) => {
+      connectionIdList.forEach((connectionId) => {
+        if (!peerConnectionMap.has(connectionId)) return;
+        console.log("Send message: ", message);
+        dataChannelMap.get(connectionId)?.send(message);
+      });
+    },
+    [connectionIdList, peerConnectionMap, dataChannelMap]
+  );
+
+  return { roomId, createRoom, joinRoomById, sendMessage };
 };
