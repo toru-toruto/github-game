@@ -1,20 +1,26 @@
 "use client";
 
 import { useWebRtcMultiConnection } from "@/fetchers/useWebRtcMultiConnection";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export default function TestWebrtcMulti() {
   const [messageLogs, setMessageLogs] = useState<string[]>([]);
 
-  const handleMessageReceived = (message: string) => {
-    setMessageLogs((prev) => [...prev, message]);
-  };
+  const handleMessageReceived = useCallback(
+    (message: string) => {
+      setMessageLogs((prev) => [...prev, message]);
+    },
+    [setMessageLogs]
+  );
 
-  const { roomId, createRoom, joinRoomById, sendMessage } = useWebRtcMultiConnection({
-    onMessageReceived: handleMessageReceived,
-  });
+  const { roomId, createRoom, joinRoomById, sendMessage, registerOnMessageReceived } =
+    useWebRtcMultiConnection();
   const [inputRoomId, setRoomId] = useState("");
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    registerOnMessageReceived(handleMessageReceived);
+  }, [registerOnMessageReceived, handleMessageReceived]);
 
   return (
     <div>

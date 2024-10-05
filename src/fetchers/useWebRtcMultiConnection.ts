@@ -33,6 +33,7 @@
 // }
 
 import { db } from "@/firebase-config/firebase-config";
+import { HandleMessageReceived } from "@/types";
 import {
   addDoc,
   collection,
@@ -41,6 +42,7 @@ import {
   DocumentReference,
   getDocs,
   onSnapshot,
+  QuerySnapshot,
   setDoc,
   updateDoc,
 } from "firebase/firestore";
@@ -55,11 +57,7 @@ import { useCallback, useMemo, useState } from "react";
  * Offers, answers and ICE candidates data are stored in Firestore.
  * With onSnapshot, we can listen these data changes and create WebRTC connection.
  */
-export const useWebRtcMultiConnection = ({
-  onMessageReceived,
-}: {
-  onMessageReceived?: (message: string) => void;
-}) => {
+export const useWebRtcMultiConnection = () => {
   const configuration = useMemo(
     () => ({
       iceServers: [
@@ -72,12 +70,14 @@ export const useWebRtcMultiConnection = ({
   );
 
   const [roomId, setRoomId] = useState<string | null>(null);
+  const [playerId, setPlayerId] = useState<number>(-1);
   // key: remote member id
   const [peerConnectionMap, setPeerConnectionMap] = useState<Map<string, RTCPeerConnection>>(
     new Map()
   );
   const [dataChannelMap, setDataChannelMap] = useState<Map<string, RTCDataChannel>>(new Map());
   const [connectionIdList, setConnectionIdList] = useState<string[]>([]);
+  const [onMessageReceived, registerOnMessageReceived] = useState<HandleMessageReceived | null>();
 
   const createDataChannel = useCallback(
     (newDataChannel: RTCDataChannel, remoteMemberId: string) => {
@@ -241,6 +241,7 @@ export const useWebRtcMultiConnection = ({
     // create room doc
     const roomRef = doc(collection(db, "rooms"));
     setRoomId(roomRef.id);
+    setPlayerId(1);
     // create my doc
     const myMemberRef = doc(collection(roomRef, "members"));
     const createdAt = Date.now();
@@ -284,11 +285,11 @@ export const useWebRtcMultiConnection = ({
 
   const createConnections = useCallback(
     async (
-      roomRef: DocumentReference<DocumentData>,
+      memberDocs: QuerySnapshot<DocumentData, DocumentData>,
       myMemberRef: DocumentReference<DocumentData, DocumentData>
     ) => {
       // create connections to all members
-      (await getDocs(collection(roomRef, "members"))).forEach(async (memberDoc) => {
+      memberDocs.forEach(async (memberDoc) => {
         if (memberDoc.id === myMemberRef.id) {
           return;
         }
@@ -325,9 +326,13 @@ export const useWebRtcMultiConnection = ({
     async (roomId: string) => {
       setRoomId(roomId);
       const roomRef = doc(collection(db, "rooms"), roomId);
+      // get existing members
+      const memberDocs = await getDocs(collection(roomRef, "members"));
+      setPlayerId(memberDocs.size);
       // set my member doc
       const myMemberRef = doc(collection(roomRef, "members"));
-      await createConnections(roomRef, myMemberRef);
+
+      await createConnections(memberDocs, myMemberRef);
       const createdAt = Date.now();
       listenNewMembers(roomRef, myMemberRef.id, createdAt);
       setDoc(myMemberRef, {
@@ -351,5 +356,5 @@ export const useWebRtcMultiConnection = ({
     [connectionIdList, peerConnectionMap, dataChannelMap]
   );
 
-  return { roomId, createRoom, joinRoomById, sendMessage };
+  return { roomId, playerId, createRoom, joinRoomById, sendMessage, registerOnMessageReceived };
 };

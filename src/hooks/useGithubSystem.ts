@@ -1,4 +1,5 @@
-import { PlayerData } from "@/types";
+import { useWebRtcMultiConnection } from "@/fetchers/useWebRtcMultiConnection";
+import { HandleMessageReceived, PlayerData } from "@/types";
 import { useCallback, useEffect, useState } from "react";
 
 type Props = {
@@ -16,6 +17,7 @@ export const useGithubSystem = ({ playerNum, lineNum }: Props) => {
   const [timestampToLineDataMap, setTimestampToLineDataMap] = useState<Map<number, Array<number>>>(
     new Map()
   );
+  const handleMessageReceived: HandleMessageReceived = (message: string) => {};
 
   // initialize player data
   useEffect(() => {
@@ -165,5 +167,6 @@ export const useGithubSystem = ({ playerNum, lineNum }: Props) => {
     playerDataList,
     selectedPlayerId,
     setSelectedPlayerId,
+    handleMessageReceived,
   };
 };

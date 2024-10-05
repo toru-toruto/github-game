@@ -7,3 +7,5 @@ export type PlayerData = {
   updatedLineList: Array<number>;
   conflictLineList: Array<number>;
 };
+
+export type HandleMessageReceived = (message: string) => void;
