@@ -43,19 +43,12 @@ import {
   doc,
   DocumentData,
   DocumentReference,
-  DocumentSnapshot,
-  getDoc,
   getDocs,
   onSnapshot,
-  QueryDocumentSnapshot,
   setDoc,
   updateDoc,
-  WriteBatch,
-  writeBatch,
 } from "firebase/firestore";
 import { useCallback, useMemo, useState } from "react";
-import { useWebRtcConnection } from "./useWebRtcConnection";
-import { get } from "http";
 
 export const useWebRtcMultiConnection = () => {
   const configuration = useMemo(
@@ -98,41 +91,57 @@ export const useWebRtcMultiConnection = () => {
   );
 
   const registerPeerConnectionListeners = useCallback(
-    (newPeerConnection: RTCPeerConnection, remoteMemberId: string) => {
-      if (!newPeerConnection) return;
-
-      newPeerConnection?.addEventListener("icegatheringstatechange", () => {
-        console.log(`ICE gathering state changed: ${newPeerConnection?.iceGatheringState}`);
-      });
-
-      newPeerConnection?.addEventListener("connectionstatechange", () => {
-        console.log(`Connection state change: ${newPeerConnection?.connectionState}`);
-      });
-
-      newPeerConnection?.addEventListener("signalingstatechange", () => {
-        console.log(`Signaling state change: ${newPeerConnection?.signalingState}`);
-      });
-
-      newPeerConnection?.addEventListener("iceconnectionstatechange ", () => {
-        console.log(`ICE connection state change: ${newPeerConnection?.iceConnectionState}`);
-      });
-
-      newPeerConnection?.addEventListener("datachannel", (event) => {
-        const receiveChannel = event.channel;
-        createDataChannel(receiveChannel, remoteMemberId);
-      });
-    },
-    [createDataChannel]
-  );
-
-  // functions for creating a connection
-  const collectCandidates = useCallback(
     (
       newPeerConnection: RTCPeerConnection,
       connectionRef: DocumentReference<DocumentData, DocumentData>,
-      candidatesDataName: string
+      remoteMemberId: string,
+      collectingCandidateName: string,
+      listeningCandidateName: string
     ) => {
-      newPeerConnection?.addEventListener("icecandidate", async (event) => {
+      if (!newPeerConnection) return;
+
+      newPeerConnection.onicegatheringstatechange = () => {
+        console.log(`ICE gathering state changed: ${newPeerConnection?.iceGatheringState}`);
+      };
+
+      newPeerConnection.onconnectionstatechange = () => {
+        console.log(`Connection state change: ${newPeerConnection?.connectionState}`);
+      };
+
+      newPeerConnection.onsignalingstatechange = () => {
+        console.log(
+          `Signaling state change: ${newPeerConnection.localDescription} ${newPeerConnection?.signalingState}`
+        );
+      };
+
+      const unsubscribe = onSnapshot(
+        collection(connectionRef, listeningCandidateName),
+        (snapshot) => {
+          snapshot.docChanges().forEach(async (change) => {
+            if (change.type === "added") {
+              const data = change.doc.data();
+              console.log(`Got new remote ICE candidate: ${JSON.stringify(data)}`);
+              await newPeerConnection?.addIceCandidate(new RTCIceCandidate(data));
+            }
+          });
+        }
+      );
+
+      newPeerConnection.oniceconnectionstatechange = () => {
+        console.log(`ICE connection state change: ${newPeerConnection?.iceConnectionState}`);
+        if (newPeerConnection.iceConnectionState === "connected") {
+          console.log("connected events removed");
+          newPeerConnection.onicecandidate = null;
+          unsubscribe();
+        }
+      };
+
+      newPeerConnection.ondatachannel = (event) => {
+        const receiveChannel = event.channel;
+        createDataChannel(receiveChannel, remoteMemberId);
+      };
+
+      newPeerConnection.onicecandidate = async (event) => {
         if (newPeerConnection.iceConnectionState == "connected") {
           console.log("already connected");
           return;
@@ -142,10 +151,10 @@ export const useWebRtcMultiConnection = () => {
           return;
         }
         console.log("Got candidate: ", event.candidate);
-        await addDoc(collection(connectionRef, candidatesDataName), event.candidate.toJSON());
-      });
+        await addDoc(collection(connectionRef, collectingCandidateName), event.candidate.toJSON());
+      };
     },
-    []
+    [createDataChannel]
   );
 
   const createAnswer = useCallback(
@@ -154,76 +163,80 @@ export const useWebRtcMultiConnection = () => {
       connectionRef: DocumentReference<DocumentData, DocumentData>,
       connectionData: DocumentData
     ) => {
-      const offer = connectionData.offer;
-      await newPeerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+      await newPeerConnection.setRemoteDescription(new RTCSessionDescription(connectionData.offer));
       const answer = await newPeerConnection.createAnswer();
       await newPeerConnection.setLocalDescription(answer);
       updateDoc(connectionRef, {
         answer: { type: answer.type, sdp: answer.sdp },
-      });
-      console.log("Created answer:", answer);
-    },
-    []
-  );
-
-  const listenCandidates = useCallback(
-    (
-      newPeerConnection: RTCPeerConnection,
-      connectionRef: DocumentReference<DocumentData, DocumentData>,
-      candidatesDataName: string
-    ) => {
-      onSnapshot(collection(connectionRef, candidatesDataName), (snapshot) => {
-        snapshot.docChanges().forEach(async (change) => {
-          if (change.type === "added") {
-            const data = change.doc.data();
-            console.log(`Got new remote ICE candidate: ${JSON.stringify(data)}`);
-            await newPeerConnection?.addIceCandidate(new RTCIceCandidate(data));
-          }
-        });
       });
     },
     []
   );
 
   const listenNewMembers = useCallback(
-    (roomRef: DocumentReference<DocumentData>, myMemberId: string) => {
+    (roomRef: DocumentReference<DocumentData>, myMemberId: string, createdAt: number) => {
       const membersRef = collection(roomRef, "members");
       onSnapshot(membersRef, (snapshot) => {
-        snapshot.docChanges().forEach(async (change) => {
-          if (change.doc.id === myMemberId) return;
-          console.log(change);
-          if (change.type === "added") {
-            const remoteMemberId = change.doc.id;
-            console.log("New member: ", remoteMemberId);
-            onSnapshot(
-              collection(doc(membersRef, remoteMemberId), "connections"),
-              async (connSnapshot) => {
-                connSnapshot.docChanges().forEach(async (connChange) => {
-                  if (connChange.type === "added") {
-                    const newPeerConnection = new RTCPeerConnection(configuration);
-                    const connectionRef = connChange.doc.ref;
-                    const connectionData = connChange.doc.data();
-
-                    registerPeerConnectionListeners(newPeerConnection, remoteMemberId);
-                    collectCandidates(newPeerConnection, connectionRef, "calleeCandidates");
-                    await createAnswer(newPeerConnection, connectionRef, connectionData);
-                    listenCandidates(newPeerConnection, connectionRef, "callerCandidates");
-
-                    setPeerConnectionMap(
-                      (prev) => new Map(prev.set(remoteMemberId, newPeerConnection))
-                    );
-                    setConnectionIdList((prev) => [...prev, remoteMemberId]);
-                  }
-                });
-              }
-            );
+        snapshot.docChanges().forEach(async (change, index) => {
+          if (
+            change.doc.id === myMemberId ||
+            change.doc.data().createdAt < createdAt ||
+            change.type !== "added"
+          ) {
+            return;
           }
+          const remoteMemberId = change.doc.id;
+          onSnapshot(
+            collection(doc(membersRef, remoteMemberId), "connections"),
+            async (connSnapshot) => {
+              connSnapshot.docChanges().forEach(async (connChange) => {
+                if (connChange.doc.id !== myMemberId || connChange.type !== "added") {
+                  return;
+                }
+                const newPeerConnection = new RTCPeerConnection(configuration);
+                const connectionRef = connChange.doc.ref;
+                const connectionData = connChange.doc.data();
+
+                registerPeerConnectionListeners(
+                  newPeerConnection,
+                  connectionRef,
+                  remoteMemberId,
+                  "calleeCandidates",
+                  "callerCandidates"
+                );
+                await createAnswer(newPeerConnection, connectionRef, connectionData);
+
+                setPeerConnectionMap(
+                  (prev) => new Map(prev.set(remoteMemberId, newPeerConnection))
+                );
+                setConnectionIdList((prev) => [...prev, remoteMemberId]);
+              });
+            }
+          );
         });
       });
     },
     [setPeerConnectionMap, setConnectionIdList]
   );
 
+  ////////////////////////////////////////
+  /////// createRoom
+  const createRoom = useCallback(async () => {
+    // create room doc
+    const roomRef = doc(collection(db, "rooms"));
+    setRoomId(roomRef.id);
+    // create my doc
+    const myMemberRef = doc(collection(roomRef, "members"));
+    const createdAt = Date.now();
+    listenNewMembers(roomRef, myMemberRef.id, createdAt);
+    setDoc(myMemberRef, {
+      createdAt,
+    });
+    console.log("createRoom", roomRef.id, myMemberRef.id);
+  }, []);
+
+  ////////////////////////////////////////
+  /////// joinRoomById
   const createOffer = useCallback(
     async (
       newPeerConnection: RTCPeerConnection,
@@ -231,22 +244,20 @@ export const useWebRtcMultiConnection = () => {
     ) => {
       const offer = await newPeerConnection.createOffer();
       await newPeerConnection.setLocalDescription(offer);
-
       await setDoc(connectionRef, { offer: { type: offer.type, sdp: offer.sdp } });
-      console.log("Created offer:", offer);
     },
     []
   );
 
-  const listenRemoteDescription = useCallback(
-    async (
+  const listenAnswer = useCallback(
+    (
       newPeerConnection: RTCPeerConnection,
       connectionRef: DocumentReference<DocumentData, DocumentData>
     ) => {
       onSnapshot(connectionRef, async (snapshot) => {
         const data = snapshot.data();
         if (!newPeerConnection?.currentRemoteDescription && data?.answer) {
-          console.log("Set remote description: ", data.answer);
+          console.log(data?.isAnswerChecked, connectionRef.id);
           const rtcSessionDescription = new RTCSessionDescription(data.answer);
           await newPeerConnection?.setRemoteDescription(rtcSessionDescription);
         }
@@ -256,57 +267,52 @@ export const useWebRtcMultiConnection = () => {
   );
 
   const createConnections = useCallback(
-    async (roomRef: DocumentReference<DocumentData>, myMemberId: string) => {
-      // get members
-      const membersSnapshot = await getDocs(collection(roomRef, "members"));
-      console.log("membersSnapshot", membersSnapshot.size);
+    async (
+      roomRef: DocumentReference<DocumentData>,
+      myMemberRef: DocumentReference<DocumentData, DocumentData>
+    ) => {
       // create connections to all members
-      membersSnapshot.forEach(async (memberDoc) => {
-        console.log("start each member");
-        if (memberDoc.id === myMemberId) return;
+      (await getDocs(collection(roomRef, "members"))).forEach(async (memberDoc) => {
+        if (memberDoc.id === myMemberRef.id) {
+          return;
+        }
         const remoteMemberId = memberDoc.id;
         const newPeerConnection = new RTCPeerConnection(configuration);
-        const connectionRef = doc(
-          collection(doc(collection(roomRef, "members"), myMemberId), "connections"),
-          remoteMemberId
-        );
+        const connectionRef = doc(collection(myMemberRef, "connections"), remoteMemberId);
         createDataChannel(newPeerConnection.createDataChannel("my-chat"), remoteMemberId);
-        registerPeerConnectionListeners(newPeerConnection, remoteMemberId);
-        collectCandidates(newPeerConnection, connectionRef, "callerCandidates");
+        registerPeerConnectionListeners(
+          newPeerConnection,
+          connectionRef,
+          remoteMemberId,
+          "callerCandidates",
+          "calleeCandidates"
+        );
         await createOffer(newPeerConnection, connectionRef);
-        await listenRemoteDescription(newPeerConnection, connectionRef);
-        listenCandidates(newPeerConnection, connectionRef, "calleeCandidates");
+        listenAnswer(newPeerConnection, connectionRef);
 
         setConnectionIdList((prev) => [...prev, remoteMemberId]);
         setPeerConnectionMap((prev) => new Map(prev.set(remoteMemberId, newPeerConnection)));
-        console.log("end each member");
       });
     },
     [setPeerConnectionMap]
   );
-
-  const createRoom = useCallback(async () => {
-    // create room doc
-    const roomRef = doc(collection(db, "rooms"));
-    setRoomId(roomRef.id);
-    // create my doc
-    const myMemberRef = doc(collection(roomRef, "members"));
-    listenNewMembers(roomRef, myMemberRef.id);
-    setDoc(myMemberRef, {});
-    console.log("createRoom", roomRef.id, myMemberRef.id);
-  }, []);
 
   const joinRoomById = useCallback(async (roomId: string) => {
     setRoomId(roomId);
     const roomRef = doc(collection(db, "rooms"), roomId);
     // set my member doc
     const myMemberRef = doc(collection(roomRef, "members"));
-    await createConnections(roomRef, myMemberRef.id);
-    listenNewMembers(roomRef, myMemberRef.id);
-    setDoc(myMemberRef, {});
+    await createConnections(roomRef, myMemberRef);
+    const createdAt = Date.now();
+    listenNewMembers(roomRef, myMemberRef.id, createdAt);
+    setDoc(myMemberRef, {
+      createdAt,
+    });
     console.log("joinRoomById", roomId, myMemberRef.id);
   }, []);
 
+  ////////////////////////////////////////
+  /////// sendMessage
   const sendMessage = useCallback(
     (message: string) => {
       connectionIdList.forEach((connectionId) => {
