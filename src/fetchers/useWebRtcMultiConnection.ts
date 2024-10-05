@@ -50,7 +50,11 @@ import {
 } from "firebase/firestore";
 import { useCallback, useMemo, useState } from "react";
 
-export const useWebRtcMultiConnection = () => {
+export const useWebRtcMultiConnection = ({
+  onMessageReceived,
+}: {
+  onMessageReceived?: (message: string) => void;
+}) => {
   const configuration = useMemo(
     () => ({
       iceServers: [
@@ -78,6 +82,7 @@ export const useWebRtcMultiConnection = () => {
       newDataChannel.onmessage = (event) => {
         console.log(event);
         console.log("Got message:", event.data);
+        onMessageReceived?.(event.data);
       };
       newDataChannel.onclose = () => {
         console.log("Data channel is closed");
