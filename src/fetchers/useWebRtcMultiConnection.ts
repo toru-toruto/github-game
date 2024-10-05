@@ -1,16 +1,18 @@
-// MeshのWebRTCコネクションを実現する。
-// あるルームに参加しているユーザー全員とのWebRTCコネクションを確立する。
-// 最初の一人が部屋を作成する。他のメンバーはその部屋に参加する。
-// 部屋作成時にroomIdを生成。各メンバー参加時にconnectionIdを生成。
-// 各IdはFirestoreで自動生成されるドキュメントID。
 // rooms: {
 //   "roomId": {
 //     members: {
+//       "userAId": {},
 //       "userBId": {
 //         connections: {
 //           "userAId": {
+//             callerCandidates: {...},
+//             calleeCandidates: {...},
 //             offer: {
 //               type: "offer",
+//               sdp: "..."
+//             },
+//             answer: {
+//               type: "answer",
 //               sdp: "..."
 //             },
 //           }
@@ -19,16 +21,10 @@
 //       "userCId": {
 //         connections: {
 //           "userAId": {
-//             offer: {
-//               type: "offer",
-//               sdp: "..."
-//             },
+//             ...,
 //           },
 //           "userBId": {
-//             offer: {
-//               type: "offer",
-//               sdp: "..."
-//             },
+//             ...,
 //           },
 //         },
 //       },
@@ -50,6 +46,15 @@ import {
 } from "firebase/firestore";
 import { useCallback, useMemo, useState } from "react";
 
+/**
+ * A hook for mesh WebRTC connection.
+ * First user creates a room and other users join the room.
+ * New members will create offers to all existing members.
+ * Existing members will create answers to new members.
+ *
+ * Offers, answers and ICE candidates data are stored in Firestore.
+ * With onSnapshot, we can listen these data changes and create WebRTC connection.
+ */
 export const useWebRtcMultiConnection = ({
   onMessageReceived,
 }: {
