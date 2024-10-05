@@ -92,7 +92,7 @@ export const useWebRtcMultiConnection = ({
       };
       setDataChannelMap((prev) => new Map(prev.set(remoteMemberId, newDataChannel)));
     },
-    [setDataChannelMap]
+    [onMessageReceived, setDataChannelMap]
   );
 
   const registerPeerConnectionListeners = useCallback(
@@ -182,7 +182,7 @@ export const useWebRtcMultiConnection = ({
     (roomRef: DocumentReference<DocumentData>, myMemberId: string, createdAt: number) => {
       const membersRef = collection(roomRef, "members");
       onSnapshot(membersRef, (snapshot) => {
-        snapshot.docChanges().forEach(async (change, index) => {
+        snapshot.docChanges().forEach(async (change) => {
           if (
             change.doc.id === myMemberId ||
             change.doc.data().createdAt < createdAt ||
@@ -221,7 +221,13 @@ export const useWebRtcMultiConnection = ({
         });
       });
     },
-    [setPeerConnectionMap, setConnectionIdList]
+    [
+      configuration,
+      setPeerConnectionMap,
+      setConnectionIdList,
+      registerPeerConnectionListeners,
+      createAnswer,
+    ]
   );
 
   ////////////////////////////////////////
@@ -238,7 +244,7 @@ export const useWebRtcMultiConnection = ({
       createdAt,
     });
     console.log("createRoom", roomRef.id, myMemberRef.id);
-  }, []);
+  }, [setRoomId, listenNewMembers]);
 
   ////////////////////////////////////////
   /////// joinRoomById
@@ -299,22 +305,33 @@ export const useWebRtcMultiConnection = ({
         setPeerConnectionMap((prev) => new Map(prev.set(remoteMemberId, newPeerConnection)));
       });
     },
-    [setPeerConnectionMap]
+    [
+      configuration,
+      setPeerConnectionMap,
+      setConnectionIdList,
+      createDataChannel,
+      registerPeerConnectionListeners,
+      createOffer,
+      listenAnswer,
+    ]
   );
 
-  const joinRoomById = useCallback(async (roomId: string) => {
-    setRoomId(roomId);
-    const roomRef = doc(collection(db, "rooms"), roomId);
-    // set my member doc
-    const myMemberRef = doc(collection(roomRef, "members"));
-    await createConnections(roomRef, myMemberRef);
-    const createdAt = Date.now();
-    listenNewMembers(roomRef, myMemberRef.id, createdAt);
-    setDoc(myMemberRef, {
-      createdAt,
-    });
-    console.log("joinRoomById", roomId, myMemberRef.id);
-  }, []);
+  const joinRoomById = useCallback(
+    async (roomId: string) => {
+      setRoomId(roomId);
+      const roomRef = doc(collection(db, "rooms"), roomId);
+      // set my member doc
+      const myMemberRef = doc(collection(roomRef, "members"));
+      await createConnections(roomRef, myMemberRef);
+      const createdAt = Date.now();
+      listenNewMembers(roomRef, myMemberRef.id, createdAt);
+      setDoc(myMemberRef, {
+        createdAt,
+      });
+      console.log("joinRoomById", roomId, myMemberRef.id);
+    },
+    [setRoomId, createConnections, listenNewMembers]
+  );
 
   ////////////////////////////////////////
   /////// sendMessage

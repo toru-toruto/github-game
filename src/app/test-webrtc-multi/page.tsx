@@ -1,6 +1,5 @@
 "use client";
 
-import { useWebRtcConnection } from "@/fetchers/useWebRtcConnection";
 import { useWebRtcMultiConnection } from "@/fetchers/useWebRtcMultiConnection";
 import { useState } from "react";
 
