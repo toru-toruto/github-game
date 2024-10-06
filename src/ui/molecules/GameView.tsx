@@ -8,32 +8,31 @@ import { useEffect, useMemo } from "react";
 
 type Props = {
   roomId: string;
-  playerId: number;
-  registerOnMessageReceived: (callback: HandleMessageReceived) => void;
+  myPlayerId: number;
+  onMessageReceivedRef?: React.MutableRefObject<HandleMessageReceived | undefined>;
+  sendMessage: (message: string) => void;
 };
 
-export const GameView: React.FC<Props> = ({ roomId, playerId, registerOnMessageReceived }) => {
+export const GameView: React.FC<Props> = ({
+  roomId,
+  myPlayerId,
+  onMessageReceivedRef,
+  sendMessage,
+}) => {
   const lineNum = 100;
-
-  const playerNum = 4;
-  const players = useMemo(() => Array.from({ length: playerNum }), [playerNum]);
-
-  const {
-    playerDataList: playerData,
-    selectedPlayerId,
-    setSelectedPlayerId,
-    handleMessageReceived,
-  } = useGithubSystem({
-    playerNum,
+  const { playerDataList, handleMessageReceived } = useGithubSystem({
     lineNum,
+    myPlayerId,
+    sendMessage,
   });
+  const players = useMemo(() => playerDataList, [playerDataList]);
 
   useEffect(() => {
-    registerOnMessageReceived(handleMessageReceived);
-  }, [registerOnMessageReceived, handleMessageReceived]);
+    onMessageReceivedRef!.current = handleMessageReceived;
+  }, [onMessageReceivedRef?.current, handleMessageReceived]);
 
   const directionText = useMemo(() => {
-    switch (playerData[selectedPlayerId]?.status) {
+    switch (playerDataList[myPlayerId]?.status) {
       case "NONE":
         return "Press ENTER key to checkout.";
       case "WORKING":
@@ -43,26 +42,21 @@ export const GameView: React.FC<Props> = ({ roomId, playerId, registerOnMessageR
       default:
         return "Press ENTER key to checkout.";
     }
-  }, [playerData, selectedPlayerId]);
+  }, [playerDataList, myPlayerId]);
 
   return (
     <div className="h-screen bg-white flex">
       <div className="w-auto h-full bg-green-400 grid grid-rows-4 gap-4 py-4 pl-4">
-        {players.map((_, i) => (
-          <PlayerIcon
-            key={i}
-            playerId={i}
-            isActive={i === selectedPlayerId}
-            setSelectedPlayerNum={setSelectedPlayerId}
-          />
+        {players.map((player, i) => (
+          <PlayerIcon key={player.id} playerId={player.id} isActive={player.id === myPlayerId} />
         ))}
       </div>
       <div className={`grow h-full bg-green-100 flex flex-col`}>
-        <CodePanel lineNum={lineNum} playerData={playerData} selectedPlayerId={selectedPlayerId} />
+        <CodePanel lineNum={lineNum} playerData={playerDataList} myPlayerId={myPlayerId} />
       </div>
       <div className="absolute text-black">
         <p>
-          {`player: ${selectedPlayerId}, status: ${playerData[selectedPlayerId]?.status}, ${directionText}`}
+          {`player: ${myPlayerId}, status: ${playerDataList[myPlayerId]?.status}, ${directionText}`}
         </p>
       </div>
     </div>

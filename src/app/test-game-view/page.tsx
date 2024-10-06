@@ -47,7 +47,7 @@ const GameView: React.FC = () => {
         ))}
       </div>
       <div className={`grow h-full bg-green-100 flex flex-col`}>
-        <CodePanel lineNum={lineNum} playerData={playerData} selectedPlayerId={selectedPlayerId} />
+        <CodePanel lineNum={lineNum} playerData={playerData} myPlayerId={selectedPlayerId} />
       </div>
       <div className="absolute text-black">
         <p>

@@ -46,7 +46,7 @@ import {
   setDoc,
   updateDoc,
 } from "firebase/firestore";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * A hook for mesh WebRTC connection.
@@ -68,26 +68,26 @@ export const useWebRtcMultiConnection = () => {
     }),
     []
   );
-
   const [roomId, setRoomId] = useState<string | null>(null);
-  const [playerId, setPlayerId] = useState<number>(-1);
+  const [myPlayerId, setMyPlayerId] = useState<number>(-1);
   // key: remote member id
   const [peerConnectionMap, setPeerConnectionMap] = useState<Map<string, RTCPeerConnection>>(
     new Map()
   );
   const [dataChannelMap, setDataChannelMap] = useState<Map<string, RTCDataChannel>>(new Map());
   const [connectionIdList, setConnectionIdList] = useState<string[]>([]);
-  const [onMessageReceived, registerOnMessageReceived] = useState<HandleMessageReceived | null>();
+  const [isNewDataChannelOpen, setIsNewDataChannelOpen] = useState<boolean>(false);
+  const onMessageReceivedRef = useRef<HandleMessageReceived>();
 
   const createDataChannel = useCallback(
     (newDataChannel: RTCDataChannel, remoteMemberId: string) => {
       newDataChannel.onopen = () => {
         console.log("Data channel is open");
+        setIsNewDataChannelOpen(true);
       };
       newDataChannel.onmessage = (event) => {
-        console.log(event);
         console.log("Got message:", event.data);
-        onMessageReceived?.(event.data);
+        onMessageReceivedRef.current?.(event.data);
       };
       newDataChannel.onclose = () => {
         console.log("Data channel is closed");
@@ -97,7 +97,7 @@ export const useWebRtcMultiConnection = () => {
       };
       setDataChannelMap((prev) => new Map(prev.set(remoteMemberId, newDataChannel)));
     },
-    [onMessageReceived, setDataChannelMap]
+    [onMessageReceivedRef.current, setDataChannelMap]
   );
 
   const registerPeerConnectionListeners = useCallback(
@@ -241,7 +241,7 @@ export const useWebRtcMultiConnection = () => {
     // create room doc
     const roomRef = doc(collection(db, "rooms"));
     setRoomId(roomRef.id);
-    setPlayerId(1);
+    setMyPlayerId(0);
     // create my doc
     const myMemberRef = doc(collection(roomRef, "members"));
     const createdAt = Date.now();
@@ -328,7 +328,7 @@ export const useWebRtcMultiConnection = () => {
       const roomRef = doc(collection(db, "rooms"), roomId);
       // get existing members
       const memberDocs = await getDocs(collection(roomRef, "members"));
-      setPlayerId(memberDocs.size);
+      setMyPlayerId(memberDocs.size);
       // set my member doc
       const myMemberRef = doc(collection(roomRef, "members"));
 
@@ -356,5 +356,21 @@ export const useWebRtcMultiConnection = () => {
     [connectionIdList, peerConnectionMap, dataChannelMap]
   );
 
-  return { roomId, playerId, createRoom, joinRoomById, sendMessage, registerOnMessageReceived };
+  useEffect(() => {
+    if (myPlayerId === -1 || !onMessageReceivedRef.current) return;
+    const messageToNotifyPlayerId = JSON.stringify({
+      type: "NOTIFY_PLAYER_ID",
+      value: { playerId: myPlayerId },
+    });
+    sendMessage(messageToNotifyPlayerId);
+  }, [myPlayerId, onMessageReceivedRef.current, isNewDataChannelOpen]);
+
+  return {
+    roomId,
+    myPlayerId,
+    onMessageReceivedRef,
+    createRoom,
+    joinRoomById,
+    sendMessage,
+  };
 };

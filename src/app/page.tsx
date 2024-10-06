@@ -5,7 +5,7 @@ import { GameView } from "@/ui/molecules/GameView";
 import { RoomSelectView } from "@/ui/molecules/RoomSelectView";
 
 export default function Home() {
-  const { roomId, playerId, createRoom, joinRoomById, sendMessage, registerOnMessageReceived } =
+  const { roomId, myPlayerId, onMessageReceivedRef, createRoom, joinRoomById, sendMessage } =
     useWebRtcMultiConnection();
 
   return (
@@ -14,9 +14,10 @@ export default function Home() {
         <RoomSelectView createRoom={createRoom} joinRoomById={joinRoomById} />
       ) : (
         <GameView
-          roomId={roomId}
-          playerId={playerId}
-          registerOnMessageReceived={registerOnMessageReceived}
+          roomId={roomId!}
+          myPlayerId={myPlayerId}
+          onMessageReceivedRef={onMessageReceivedRef}
+          sendMessage={sendMessage}
         />
       )}
     </>
