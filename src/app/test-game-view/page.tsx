@@ -4,7 +4,7 @@ import { useGithubSystem } from "@/hooks/useGithubSystem";
 import { HandleMessageReceived } from "@/types";
 import { PlayerIcon } from "@/ui/atoms/PlayerIcon";
 import { CodePanel } from "@/ui/molecules/CodePanel";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const GameView: React.FC = () => {
   const lineNum = 100;
@@ -12,17 +12,22 @@ const GameView: React.FC = () => {
   const playerNum = 4;
   const players = useMemo(() => Array.from({ length: playerNum }), [playerNum]);
 
+  const myPlayerId = 0;
+
   const {
     playerDataList: playerData,
-    selectedPlayerId,
-    setSelectedPlayerId,
+    // selectedPlayerId,
+    // setSelectedPlayerId,
+    handleMessageReceived,
   } = useGithubSystem({
-    playerNum,
+    // playerNum,
     lineNum,
+    myPlayerId,
+    sendMessage: () => {},
   });
 
   const directionText = useMemo(() => {
-    switch (playerData[selectedPlayerId]?.status) {
+    switch (playerData[myPlayerId]?.status) {
       case "NONE":
         return "Press ENTER key to checkout.";
       case "WORKING":
@@ -32,7 +37,7 @@ const GameView: React.FC = () => {
       default:
         return "Press ENTER key to checkout.";
     }
-  }, [playerData, selectedPlayerId]);
+  }, [playerData, myPlayerId]);
 
   return (
     <div className="h-screen bg-white flex">
@@ -41,17 +46,17 @@ const GameView: React.FC = () => {
           <PlayerIcon
             key={i}
             playerId={i}
-            isActive={i === selectedPlayerId}
-            setSelectedPlayerNum={setSelectedPlayerId}
+            isActive={i === myPlayerId}
+            // setSelectedPlayerNum={setSelectedPlayerId}
           />
         ))}
       </div>
       <div className={`grow h-full bg-green-100 flex flex-col`}>
-        <CodePanel lineNum={lineNum} playerData={playerData} myPlayerId={selectedPlayerId} />
+        <CodePanel lineNum={lineNum} playerData={playerData} myPlayerId={myPlayerId} />
       </div>
       <div className="absolute text-black">
         <p>
-          {`player: ${selectedPlayerId}, status: ${playerData[selectedPlayerId]?.status}, ${directionText}`}
+          {`player: ${myPlayerId}, status: ${playerData[myPlayerId]?.status}, ${directionText}`}
         </p>
       </div>
     </div>
